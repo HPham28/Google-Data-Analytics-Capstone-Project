@@ -1,0 +1,474 @@
+---
+title: "Google Data Analytics Capstone Case Study"
+author: "Kendrick Tuan Huy Pham"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+## About Bellabeat
+
+Bellabeat is a high-tech manufacturer of health and wellness-focused products marketed towards women founded by Urška Sršen and Sando Mur. Urška Sršen used her background as an artist to develop elegantly-designed technology that is both aesthetically pleasing and informative for women around the world.
+
+## Business Task
+
+Sršen asks you to analyze smart device usage data in order to gain insight into how consumers use non-Bellabeat smart devices. She then wants you to select one Bellabeat product to apply these insights to in your presentation. These questions will guide your analysis: 
+
+1. What are some trends in smart device usage? 
+2. How could these trends apply to Bellabeat customers? 
+3. How could these trends help influence Bellabeat marketing strategy? 
+
+You will produce a report with the following deliverables: 
+
+1. A clear summary of the business task 
+2. A description of all data sources used 
+3. Documentation of any cleaning or manipulation of data 
+4. A summary of your analysis 
+5. Supporting visualizations and key findings 
+6. Your top high-level content recommendations based on your analysis 
+
+I will be analyzing Fitbit user trends in activity, intensities, and sleep in order to form high-level content recommendations for the Time smartwatch developed by Bellabeat.
+
+### Setting Up Environment
+
+```{r loading packages, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(dplyr) 
+library(skimr)
+library(ggplot2) 
+library(janitor)
+library(lubridate)
+library(reshape2)
+library(scales)
+```
+
+### Data Source
+
+Data was imported from the Fitbit Fitness Tracker data from Kaggle, which can be found [here](https://www.kaggle.com/datasets/arashnic/fitbit). This data was generated from a survey of 33 Fitbit users through Amazon Mechanical Turk containing personal health & activity data between March 12, 2016 and May 12, 2016.
+
+Some issues present before examining the data is that the sample size is fairly low but large enough to begin representing the population, the time of the survey is not very recent, and the survey did not query individuals for their sex, which may impact the findings of the analysis, due to the target audience of Bellabeat being women. 
+
+### Importing Data
+
+```{r importing data}
+activity <- read.csv("dailyActivity_merged.csv")
+
+intensities <- read.csv("dailyIntensities_merged.csv")
+
+calories <- read.csv("dailyCalories_merged.csv")
+
+sleep <- read.csv("sleepDay_merged.csv")
+
+steps <- read.csv("dailySteps_merged.csv")
+```
+
+## Examining Data
+
+### Validating Unique IDs
+
+I started examining the data by validating the number of unique ids in each csv file.
+
+```{r validating number of unique ids}
+activity_unique <- unique(activity)
+n_distinct(activity_unique$Id)
+
+intensities_unique <- unique(intensities)
+n_distinct(intensities_unique$Id)
+
+calories_unique <- unique(calories)
+n_distinct(calories_unique$Id)
+
+sleep_unique <- unique(sleep)
+n_distinct(sleep_unique$Id)
+
+steps_unique <- unique(steps)
+n_distinct(steps_unique$Id)
+```
+Based on the sample sizes, I will exclude the sleep dataset from the primary analysis because it is too low to begin representing the total population. However, I will still conduct an analysis with the sleep dataset as sleep tracking is part of the Time smartwatch's features.
+
+## Data Cleaning
+
+I continued cleaning the data next, removing any duplicate or NA values, and reformatting columns and dates to be uniform.
+
+```{r cleaning}
+
+activity_cleaned <- clean_names(activity_unique)
+activity_cleaned <- mutate(activity_cleaned, date_cleaned = mdy(activity_cleaned$activity_date))
+
+intensities_cleaned <- clean_names(intensities_unique)
+intensities_cleaned <- mutate(intensities_cleaned, date_cleaned = mdy(intensities_cleaned$activity_day))
+
+calories_cleaned <- clean_names(calories_unique)
+calories_cleaned <- mutate(calories_cleaned, date_cleaned = mdy(calories_cleaned$activity_day))
+
+sleep_cleaned <- clean_names(sleep_unique)
+sleep_cleaned <- mutate(sleep_cleaned, date_cleaned = parse_date_time(sleep_cleaned$sleep_day, '%m/%d/%Y %I:%M:%S %p'))
+
+steps_cleaned <- clean_names(steps_unique)
+steps_cleaned <- mutate(steps_cleaned, date_cleaned = mdy(steps_cleaned$activity_day))
+```
+
+Verifying no null values
+
+```{r NA verification}
+sum(is.na(activity_cleaned))
+
+sum(is.na(intensities_cleaned))
+
+sum(is.na(calories_cleaned))
+
+sum(is.na(sleep_cleaned))
+
+sum(is.na(steps_cleaned))
+```
+At this point, I noticed that dailyActivity_merged.csv contains collated data from intensities, calories, and steps, so I will use activity_cleaned for any new analyses
+Issues include units not being clearly defined, low sample size (n = 33)
+
+### Preliminary Summary of dailyActivity_merged dataset
+
+```{r}
+activity_summarized <- summarise(activity_cleaned, avg_distance = mean(total_distance), max_distance = max(total_distance), min_distance = min(total_distance),
+                                 avg_calories = mean(calories), max_calories = max(calories), min_calories = min(calories), avg_steps = mean(total_steps),
+                                 max_steps = max(total_steps), min_steps = min(total_steps))
+head(activity_summarized)
+```
+
+It is notable that there are data points which have the min_distance = 0, min_calories = 0, and/or min_steps = 0, which is improbable because there is always a nonzero amount of calories burned or distance travelled in a day accounting for regular human activity and calories burned during brain function. At this point, I decided to run preliminary graphs and correlation coefficients to compare with a round of filtration.
+
+##Preliminary Visualizations
+
+```{r}
+ggplot(activity_cleaned,aes(x = total_distance,y = very_active_minutes)) +
+  geom_point() +
+  geom_smooth() +
+  ggtitle("Time Spent Very Active versus Total Distance Travelled") +
+  ylab("Minutes")
+
+cor(activity_cleaned$total_distance, activity_cleaned$very_active_minutes)
+
+#Repeating for Very Active, Fairly Active, Lightly Active, and Sedentary Minutes against Total Distance
+
+ggplot(activity_cleaned,aes(x = total_distance,y = fairly_active_minutes)) +
+  geom_point() +
+  geom_smooth() +
+  ggtitle("Time Spent Fairly Active versus Total Distance Travelled") +
+  ylab("Minutes")
+
+cor(activity_cleaned$total_distance, activity_cleaned$fairly_active_minutes)
+
+ggplot(activity_cleaned,aes(x = total_distance,y = lightly_active_minutes)) +
+  geom_point() +
+  geom_smooth() +
+  ggtitle("Time Spent Lightly Active versus Total Distance Travelled") +
+  ylab("Minutes")
+
+cor(activity_cleaned$total_distance, activity_cleaned$lightly_active_minutes)
+
+ggplot(activity_cleaned,aes(x = total_distance,y = sedentary_minutes)) +
+  geom_point() +
+  geom_smooth() +
+  ggtitle("Time Spent Sedentary versus Total Distance Travelled") +
+  ylab("Minutes")
+
+cor(activity_cleaned$total_distance, activity_cleaned$sedentary_minutes)
+
+ggplot(activity_cleaned,aes(x = total_distance,y = calories)) +
+  geom_point() +
+  geom_smooth() +
+  ggtitle("Total Distance Travelled versus Calories Burned")
+
+cor(activity_cleaned$total_distance, activity_cleaned$calories)
+
+ggplot(activity_cleaned,aes(x = very_active_minutes,y = calories)) +
+  geom_point() +
+  geom_smooth() +
+  ggtitle("Very Active Minutes versus Calories Burned")
+
+cor(activity_cleaned$very_active_minutes, activity_cleaned$calories)
+
+ggplot(activity_cleaned,aes(x = fairly_active_minutes,y = calories)) +
+  geom_point() +
+  geom_smooth() +
+  ggtitle("Fairly Active Minutes versus Calories Burned")
+
+cor(activity_cleaned$fairly_active_minutes, activity_cleaned$calories)
+
+ggplot(activity_cleaned,aes(x = lightly_active_minutes,y = calories)) +
+  geom_point() +
+  geom_smooth() +
+  ggtitle("Lightly Active Minutes versus Calories Burned")
+
+cor(activity_cleaned$lightly_active_minutes, activity_cleaned$calories)
+
+ggplot(activity_cleaned,aes(x = sedentary_minutes,y = calories)) +
+  geom_point() +
+  geom_smooth() +
+  ggtitle("Sedentary Minutes versus Calories Burned")
+
+cor(activity_cleaned$sedentary_minutes, activity_cleaned$calories)
+```
+
+Another trend to examine is to see which days users are the most active proportionally. Necessary components of this analysis included total time spent in a day, time spent at each intensity, and possibly proportional values of both. I turned dates into categorical days of the week and grouped by weekday
+
+```{r activity_long}
+activity_long <- activity_cleaned %>% 
+  mutate(total_minutes = rowSums(activity_cleaned[11:14])) %>%
+  mutate(active_minutes = rowSums(activity_cleaned[11:13])) %>%
+  mutate(proportion_active = (active_minutes/total_minutes)) %>%
+  mutate(weekday = wday(activity_cleaned$date_cleaned, label = TRUE)) %>%
+  glimpse()
+```
+
+Based on the total_minutes, not all of the minutes in a day (n = 1440) are being counted, which may affect the results.
+
+### Filtering data 
+
+I filtered the data based on entries that account for all the time in a day and have 1 or more minutes of very active, fairly active, or lightly active intensities.
+
+```{r filtering}
+filtered_activity <- filter(activity_long, total_minutes == 1440 & sedentary_minutes <= 1439 & total_distance >= 1)
+head(filtered_activity)
+```
+
+### Filtered Visualizations and Correlation Coefficients
+
+```{r filtered graphs}
+ggplot(filtered_activity,aes(x = total_distance,y = very_active_minutes)) +
+  geom_point() +
+  geom_smooth() +
+  ggtitle("Time Spent Very Active versus Total Distance Travelled") +
+  ylab("Minutes")
+
+cor(filtered_activity$total_distance, filtered_activity$very_active_minutes)
+
+ggplot(filtered_activity,aes(x = total_distance,y = fairly_active_minutes)) +
+  geom_point() +
+  geom_smooth() +
+  ggtitle("Time Spent Fairly Active versus Total Distance Travelled") +
+  ylab("Minutes")
+
+cor(filtered_activity$total_distance, filtered_activity$fairly_active_minutes)
+
+ggplot(filtered_activity,aes(x = total_distance,y = lightly_active_minutes)) +
+  geom_point() +
+  geom_smooth() +
+  ggtitle("Time Spent Lightly Active versus Total Distance Travelled") +
+  ylab("Minutes")
+
+cor(filtered_activity$total_distance, filtered_activity$lightly_active_minutes)
+
+ggplot(filtered_activity,aes(x = total_distance,y = sedentary_minutes)) +
+  geom_point() +
+  geom_smooth() +
+  ggtitle("Time Spent Sedentary versus Total Distance Travelled") +
+  ylab("Minutes")
+
+cor(filtered_activity$total_distance, filtered_activity$sedentary_minutes)
+
+ggplot(filtered_activity,aes(x = total_distance,y = calories)) +
+  geom_point() +
+  geom_smooth() +
+  ggtitle("Total Distance Travelled versus Calories Burned")
+
+cor(filtered_activity$total_distance, filtered_activity$calories)
+
+ggplot(filtered_activity,aes(x = very_active_minutes,y = calories)) +
+  geom_point() +
+  geom_smooth() +
+  ggtitle("Very Active Minutes versus Calories Burned")
+
+cor(filtered_activity$very_active_minutes, filtered_activity$calories)
+
+ggplot(filtered_activity,aes(x = fairly_active_minutes,y = calories)) +
+  geom_point() +
+  geom_smooth() +
+  ggtitle("Fairly Active Minutes versus Calories Burned")
+
+cor(filtered_activity$fairly_active_minutes, filtered_activity$calories)
+
+ggplot(filtered_activity,aes(x = lightly_active_minutes,y = calories)) +
+  geom_point() +
+  geom_smooth() +
+  ggtitle("Lightly Active Minutes versus Calories Burned")
+
+cor(filtered_activity$lightly_active_minutes, filtered_activity$calories)
+
+ggplot(filtered_activity,aes(x = sedentary_minutes,y = calories)) +
+  geom_point() +
+  geom_smooth() +
+  ggtitle("Sedentary Minutes versus Calories Burned")
+
+cor(filtered_activity$sedentary_minutes, filtered_activity$calories)
+```
+
+With the round of filtration to remove days that have no data, the correlation between total distance traveled and very active time, sedentary time, and calories burned has increased, while the correlation between total distance traveled and fairly active and lightly active time has decreased. Overall, this indicates that the filtration has improved a majority of the correlation values of the measures.
+
+### Summarizing data by Weekday
+
+Using this filtered dataset, I then summarized the data to observe how the summary statistics changed after filtration.
+
+```{r activity_day_summary}
+activity_day_summary <- activity_long %>% 
+  group_by(weekday) %>% 
+  summarize(avg_minutes_active = mean(active_minutes), very_active = mean(very_active_minutes), fairly_active = mean(fairly_active_minutes), lightly_active = mean(lightly_active_minutes)) %>%
+  glimpse()
+```
+It appears as though the filtration has been successful at removing values that are improbable from the dataset.
+
+### Transforming Data from Long to Wide for Visualization
+
+```{r}
+weekday_activity_long <- melt(activity_day_summary, id.vars = c("weekday","avg_minutes_active"))
+colnames(weekday_activity_long)[3] = "intensity"
+colnames(weekday_activity_long)[4] = "minutes_intensity"
+head(weekday_activity_long)
+
+percentage_activity <- mutate(weekday_activity_long, intensity_percentage = percent(minutes_intensity / avg_minutes_active, accuracy = .01)) %>%
+  dplyr::group_by(weekday)
+head(percentage_activity)
+```
+
+## Weekday Intensity Breakdown Visualization
+
+```{r bar plot}
+ggplot(percentage_activity, aes(fill=intensity, y=minutes_intensity, x=weekday)) + 
+  geom_bar(position="stack", stat = "identity") +
+  geom_text(aes(label = intensity_percentage), size = 3, position = position_stack(vjust = 0.5)) +
+  labs(title = "Average Activity Based by Day and Intensity", subtitle = "Intensity proportions based on the average total activity divided by average intensity durations") +
+  xlab("Day") +
+  ylab("Average Activity (Minutes)")
+```
+
+It is interesting to see that after lightly active being the most common activity intensity, the proportion of very active intensities seems to be higher than fairly active activities.
+I wanted to see if this trend of very active minutes being more numerous than fairly active minutes, so I repeated the analysis for overall activity and visualized the data as a pie chart.
+
+## Pie chart Visualization
+
+```{r pie graph}
+intensity_summary <- summarise(filtered_activity, avg_very_active_minutes = mean(filtered_activity$very_active_minutes), 
+                               avg_fairly_active_minutes = mean(filtered_activity$fairly_active_minutes), 
+                               avg_lightly_active_minutes = mean(filtered_activity$lightly_active_minutes),
+                               avg_sedentary_minutes = mean(filtered_activity$sedentary_minutes),
+                               avg_active_minutes = mean(filtered_activity$active_minutes)) %>%
+  glimpse()
+
+intensity_summary <- intensity_summary %>%
+  mutate(total_minutes = rowSums(intensity_summary[1:4])) %>%
+  mutate(percent_very_active_minutes = percent(avg_very_active_minutes/avg_active_minutes, accuracy = 0.01)) %>% 
+  mutate(percent_fairly_active_minutes = percent(avg_fairly_active_minutes/avg_active_minutes, accuracy = 0.01)) %>%
+  mutate(percent_lightly_active_minutes = percent(avg_lightly_active_minutes/avg_active_minutes, accuracy = 0.01)) %>%
+  glimpse()
+
+intensity_percentages <- summarise(intensity_summary, percent_very_active_minutes = (avg_very_active_minutes/avg_active_minutes)*100, 
+                                   percent_fairly_active_minutes = (avg_fairly_active_minutes/avg_active_minutes)*100,
+                                   percent_lightly_active_minutes = (avg_lightly_active_minutes/avg_active_minutes)*100) %>%
+  glimpse()
+
+intensity_percentage_transposed <- t(intensity_percentages)
+
+pie(intensity_percentage_transposed, labels = rownames(intensity_percentage_transposed))
+```
+
+Based on the visual proportions of the pie chart, it seems as if it is more probable for an individual to be lightly active or very active compared to fairly active overall.
+
+### Primary Analysis
+
+Based on the weekly intensity and pie chart visualizations, it shows that lightly active minutes is the most commonly represented intensity across all days of the week, followed by very active minutes. However, the highest correlation occurred between the very active minutes and total distance traveled, followed by total distance traveled and calories burned. This was confirmed by another a r-value of 0.63 between very active minutes and calories burned. Through the visualizations above, Monday, Tuesday, and Sunday are the three days with the highest proportional presence of very active intensities in order of greatest to least. Interestingly, Saturday and Tuesday are the two days of the week with the largest amount of activity on average.
+
+## Sleep Data
+
+### Data Cleaning
+
+For the secondary analysis, I used a left join to merge the activity and sleep data based on coinciding id and date_cleaned values in order to remove any individual ids that did not report sleep data (because there were 24 unique ids in the sleep sample, and 33 in the activity_merged sample).
+
+```{r left join}
+activity_sleep_merged <- left_join(activity_cleaned, sleep_cleaned, by=c('id', 'date_cleaned'))
+  
+head(activity_sleep_merged)
+```
+
+Looking at the head of the dataframe, I see that some dates for certain ids even after the merging did not report sleep data every day, so I cleaned the dataframe by omitting any rows that had null sleep values.
+
+```{r cleaning merged dataframe, warning=FALSE}
+activity_sleep_merged_clean <- na.omit(activity_sleep_merged)
+tibble(activity_sleep_merged_clean)
+```
+
+I then added a percent asleep variable to examine whether or not the proportion of time asleep. 
+
+```{r}
+activity_sleep_merged_clean <- mutate(activity_sleep_merged_clean, percent_asleep = ((total_minutes_asleep/total_time_in_bed)*100))
+tibble(activity_sleep_merged_clean)
+```
+
+### Secondary Analysis
+
+```{r}
+sleep_summary <- summarise(activity_sleep_merged_clean, minutes_asleep_max = max(total_minutes_asleep), minutes_asleep_min = min(total_minutes_asleep), minutes_asleep_avg = mean(total_minutes_asleep),
+                           total_time_in_bed_max = max(total_time_in_bed), total_time_in_bed_min = min(total_time_in_bed), total_time_in_bed_avg = mean(total_time_in_bed),
+                           percent_asleep_max = max(percent_asleep), percent_asleep_min = min(percent_asleep), percent_asleep_avg = mean(percent_asleep))
+head(sleep_summary)
+```
+
+On average, the amount of time asleep is ~419 minutes, while the average total time in bed is ~458, which means that that the average person takes about 39 minutes to go to sleep. There do not appear to be any implausible maximum or minimum amounts. 
+
+### Visualization
+
+I examined the correlation values between different variables to see if there were any correlation values higher than 0.6.
+
+```{r sleep correlation & point plots}
+cor(activity_sleep_merged_clean$very_active_minutes, activity_sleep_merged_clean$total_minutes_asleep)
+
+cor(activity_sleep_merged_clean$fairly_active_minutes, activity_sleep_merged_clean$total_minutes_asleep)
+
+cor(activity_sleep_merged_clean$lightly_active_minutes, activity_sleep_merged_clean$total_minutes_asleep)
+
+cor(activity_sleep_merged_clean$sedentary_minutes, activity_sleep_merged_clean$total_minutes_asleep)
+
+cor(activity_sleep_merged_clean$total_steps, activity_sleep_merged_clean$total_minutes_asleep)
+
+cor(activity_sleep_merged_clean$calories, activity_sleep_merged_clean$total_minutes_asleep)
+
+cor(activity_sleep_merged_clean$total_minutes_asleep, activity_sleep_merged_clean$total_time_in_bed)
+
+cor(activity_sleep_merged_clean$very_active_minutes, activity_sleep_merged_clean$percent_asleep)
+
+cor(activity_sleep_merged_clean$fairly_active_minutes, activity_sleep_merged_clean$percent_asleep)
+
+cor(activity_sleep_merged_clean$lightly_active_minutes, activity_sleep_merged_clean$percent_asleep)
+
+cor(activity_sleep_merged_clean$sedentary_minutes, activity_sleep_merged_clean$percent_asleep)
+
+cor(activity_sleep_merged_clean$total_steps, activity_sleep_merged_clean$percent_asleep)
+
+cor(activity_sleep_merged_clean$calories, activity_sleep_merged_clean$percent_asleep)
+```
+#### Creating Visualizations from Highly Correlated Variables
+
+Based on r values above 0.6, I graphed the relationships between total time in bed with total minutes asleep, as well as total time in bed with amount of time spent sedentary.
+
+```{r}
+ggplot(data = activity_sleep_merged_clean, mapping = aes(x = total_time_in_bed, y = total_minutes_asleep)) +
+  geom_point() +
+  geom_smooth() +
+  geom_jitter() +
+  ggtitle("Total Time In Bed vs Total Time Asleep") +
+  xlab("Total Time In Bed (Minutes)") +
+  ylab("Time Asleep (Minutes)")
+
+ggplot(data = activity_sleep_merged_clean, mapping = aes(x = total_minutes_asleep, y = sedentary_minutes)) +
+  geom_point() +
+  geom_smooth() +
+  ggtitle("Total Time Asleep vs Time Spent Sedentary") +
+  xlab("Total Time In Bed (Minutes)") +
+  ylab("Sedentary Time (MInutes)")
+```
+
+## Recommendations
+
+### Primary Analysis
+
+Overall, based on both the primary analysis, I would recommend that Bellabeat implement fitness recommendations for the Time smartwatch and companion app that particularly recommend users to exercise on Tuesday, Monday, Saturday, and/or Sunday in order of greatest to least recommended due to a combination of the frequency of users to exercise at a very active intensity on those days and the frequency of users to exercise on certain days overall. The very active intensity is the most highly correlated intensity to calorie burn, which would make it attractive target to the target audience, which is women who are interested in personal health and wellness.
+
+### Secondary Analysis
+
+Through the second analysis, another recommendation is that the Time smartwatch could have an option to remind users to go to sleep approximately 40 minutes before their desired bedtime, as the data shows that users tend to have 39 minutes of wakefulness between total time in bed and time asleep on average.
